@@ -8,13 +8,13 @@ import sqlalchemy
 def get_connection_url() -> str:
     """ Получить строку подключения к базе данных """
     print('database')
-    # return "sqlite:///test.db"
+    return "sqlite:///test.db"
 
-    host = 'localhost'
-    user = 'postgres'
-    password = 'qwerty'
-    db = 'gar'
-    return f'postgresql://{user}:{password}@{host}:5432/{db}'
+    # host = 'localhost'
+    # user = 'postgres'
+    # password = 'qwerty'
+    # db = 'gar'
+    # return f'postgresql://{user}:{password}@{host}:5432/{db}'
 
 
 # metadata = sqlalchemy.MetaData()

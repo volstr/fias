@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from core import database
+from fns.import_gar import UpdateFile
 from gar import models
 
 app = FastAPI()
@@ -13,7 +14,7 @@ app = FastAPI()
 # @app.get("/", response_model=List[models.Item])
 @app.get("/")
 async def root():
-    return await models.Level.objects.all()
+    return await models.Level.objects.limit(100).all()
 
 
 @app.get("/hello/{name}")
@@ -41,6 +42,6 @@ async def shutdown() -> None:
 
 @app.on_event("startup")
 async def main() -> None:
-    levels = await models.Level.objects.all()
-    print(levels)
-
+    file_name = r'D:\Project\KMIAC\PyFIAS\updates\20211112_gar_xml.zip'
+    d = UpdateFile(file_name)
+    await d.load_file_list(file_name)
