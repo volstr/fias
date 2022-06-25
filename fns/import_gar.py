@@ -1,6 +1,5 @@
 import asyncio
 import collections
-import os
 import zipfile
 from datetime import datetime
 from typing import List, Any, Optional
@@ -8,10 +7,10 @@ from typing import List, Any, Optional
 
 from fns.gar_xml import rows_from_xml
 from gar.models import Level, AddressObject, AddressType, ParamType, AdministrationHierarchy, AddressObjectParam, \
-    HouseType, House
+    HouseType, House, ApartmentType, Apartment, MunHierarchy
 
 
-class GarImport:
+class GarImportBase:
     def __init__(self, archive: zipfile.ZipFile, region: Optional[int] = None) -> None:
         assert region is None or 0 < region < 100, 'Не корректно указан регион'
         self.archive = archive
@@ -21,6 +20,7 @@ class GarImport:
         self._checked_models = (
             AddressObject,
             House,
+            Apartment,
         )
         self._load_file_list()
 
@@ -31,9 +31,12 @@ class GarImport:
         self._file_address_object_type: str = [x for x in fl if 'AS_ADDR_OBJ_TYPES_202' in x][0]
         self._file_param_type: str = [x for x in fl if 'AS_PARAM_TYPES_202' in x][0]
         self._file_house_type: str = [x for x in fl if 'AS_HOUSE_TYPES_202' in x][0]
+        self._file_apartment_type: str = [x for x in fl if 'AS_APARTMENT_TYPES_202' in x][0]
         self._file_address_object: List[str] = [x for x in fl if f'{region}/AS_ADDR_OBJ_202' in x]
         self._file_house: List[str] = [x for x in fl if f'{region}/AS_HOUSES_202' in x]
+        self._file_apartment: List[str] = [x for x in fl if f'{region}/AS_APARTMENTS_202' in x]
         self._file_administration_hierarchy: List[str] = [x for x in fl if f'{region}/AS_ADM_HIERARCHY_202' in x]
+        self._file_mun_hierarchy: List[str] = [x for x in fl if f'{region}/AS_MUN_HIERARCHY_202' in x]
         self._file_address_object_param: List[str] = [x for x in fl if f'{region}/AS_ADDR_OBJ_PARAMS_202' in x]
 
     async def _commit_updates(self, model, items, is_exist: bool, check_object_id: bool = False) -> None:
@@ -80,9 +83,16 @@ class GarImport:
                 if len(items) >= 1000:
                     await self._commit_updates(model, items, is_exist, check_object_id)
                     items.clear()
-                    # break
+                    # TODO
+                    if idx > 50000:
+                        break
         # Добавляем оставшееся
         await self._commit_updates(model, items, is_exist, check_object_id)
+
+
+class GarImport(GarImportBase):
+    def __init__(self, archive: zipfile.ZipFile, region: Optional[int] = None) -> None:
+        super().__init__(archive, region)
 
     async def import_level(self):
         file_name = self._file_levels
@@ -152,6 +162,23 @@ class GarImport:
             )
         await self._import_model(HouseType, file_name, parse)
 
+    async def import_apartment_type(self):
+        file_name = self._file_apartment_type
+        assert 'AS_APARTMENT_TYPES_202' in file_name, f'{file_name} не AS_APARTMENT_TYPES'
+
+        def parse(item) -> ApartmentType:
+            return ApartmentType(
+                id=item.get('@ID'),
+                name=item.get('@NAME'),
+                short_name=item.get('@SHORTNAME'),
+                description=item.get('@DESC') if item.get('@DESC') else None,
+                update_date=datetime.strptime(item.get('@UPDATEDATE'), "%Y-%m-%d").date(),
+                start_date=datetime.strptime(item.get('@STARTDATE'), "%Y-%m-%d").date(),
+                end_date=datetime.strptime(item.get('@ENDDATE'), "%Y-%m-%d").date(),
+                is_active=item.get('@ISACTIVE') == 'true'
+            )
+        await self._import_model(ApartmentType, file_name, parse)
+
     async def import_address_object(self):
         """
         Импорт сведений классификатора адресообразующих элементов (регионы, города, улицы... Домов тут нет)
@@ -209,6 +236,31 @@ class GarImport:
         ]
         await asyncio.gather(*tasks)
 
+    async def import_apartment(self):
+        """
+        Импорт сведений по помещениям
+        """
+        def parse(item) -> Optional[Apartment]:
+            if int(item.get('@NEXTID', 0)) == 0:
+                # Выбираем только актуальные записи
+                return Apartment(
+                    id=item.get('@ID'),
+                    object_id=int(item.get('@OBJECTID')),
+                    object_guid=item.get('@OBJECTGUID'),
+                    number=item.get('@NUMBER'),
+                    apartment_type_id=int(item.get('@APARTTYPE')),
+                    is_actual=item.get('@ISACTUAL') == '1',
+                    update_date=datetime.strptime(item.get('@UPDATEDATE'), "%Y-%m-%d").date(),
+                    start_date=datetime.strptime(item.get('@STARTDATE'), "%Y-%m-%d").date(),
+                    end_date=datetime.strptime(item.get('@ENDDATE'), "%Y-%m-%d").date(),
+                    is_active=item.get('@ISACTIVE') == '1'
+                )
+        tasks = [
+            asyncio.create_task(self._import_model(Apartment, file_name, parse))
+            for file_name in self._file_apartment
+        ]
+        await asyncio.gather(*tasks)
+
     async def import_administration_hierarchy(self):
         """
         Импорт сведений по иерархии в административном делении
@@ -237,6 +289,30 @@ class GarImport:
         ]
         await asyncio.gather(*tasks)
 
+    async def import_mun_hierarchy(self):
+        """
+        Импорт сведений по иерархии в муниципальном делении
+        """
+        def parse(item) -> Optional[MunHierarchy]:
+            if int(item.get('@NEXTID', 0)) == 0:
+                # Выбираем только актуальные записи
+                return MunHierarchy(
+                    id=item.get('@ID'),
+                    object_id=int(item.get('@OBJECTID')),
+                    parent_object_id=None if item.get('@PARENTOBJID', '0') == '0' else int(item.get('@PARENTOBJID')),
+                    oktmo=item.get('@OBJECTID'),
+                    path=item.get('@PATH'),
+                    update_date=datetime.strptime(item.get('@UPDATEDATE'), "%Y-%m-%d").date(),
+                    start_date=datetime.strptime(item.get('@STARTDATE'), "%Y-%m-%d").date(),
+                    end_date=datetime.strptime(item.get('@ENDDATE'), "%Y-%m-%d").date(),
+                    is_active=item.get('@ISACTIVE') == '1'
+                )
+        tasks = [
+            asyncio.create_task(self._import_model(MunHierarchy, file_name, parse, True))
+            for file_name in self._file_mun_hierarchy
+        ]
+        await asyncio.gather(*tasks)
+
     async def import_address_object_param(self):
         """
         Импорт сведений по типу параметра (в простонародье КЛАДР)
@@ -262,33 +338,29 @@ class GarImport:
         ]
         await asyncio.gather(*tasks)
 
+    async def import_all(self):
+        print(1, datetime.now())
+        await self.import_level()
+        await self.import_address_type()
+        await self.import_param_types()
+        await self.import_house_types()
+        await self.import_apartment_type()
+        print(2, datetime.now())
 
-class UpdateFile:
-    def __init__(self, zip_name: str):
-        base_name = os.path.basename(zip_name)
-        self.version: int = int(base_name[:8])
-        # self._load_file_list(zip_name)
+        await self.import_address_object()
+        print(3, datetime.now())
 
-    async def load_file_list(self, zip_name) -> None:
-        region = '23'
+        await self.import_houses()
+        print(4, datetime.now())
 
-        with zipfile.ZipFile(zip_name, mode='r', allowZip64=True) as archive:
-            gar = GarImport(archive, 23)
-            print(1, datetime.now())
-            await gar.import_level()
-            await gar.import_address_type()
-            await gar.import_param_types()
-            await gar.import_house_types()
-            print(2, datetime.now())
+        await self.import_apartment()
+        print(5, datetime.now())
 
-            await gar.import_address_object()
-            print(3, datetime.now())
+        await self.import_administration_hierarchy()
+        print(6, datetime.now())
 
-            await gar.import_houses()
-            print(4, datetime.now())
+        await self.import_mun_hierarchy()
+        print(7, datetime.now())
 
-            await gar.import_administration_hierarchy()
-            print(5, datetime.now())
-
-            await gar.import_address_object_param()
-            print(6, datetime.now())
+        await self.import_address_object_param()
+        print(8, datetime.now())

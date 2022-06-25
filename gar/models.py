@@ -1,5 +1,5 @@
 import datetime
-from typing import Union, Dict, Optional
+from typing import Union, Dict
 
 import ormar
 
@@ -18,6 +18,22 @@ class DateModelMixin:
     is_active: bool = ormar.Boolean(comment='Статус активности')
 
 
+class DirectoryBase(ormar.Model, DateModelMixin):
+    """
+    Базовый класс справочников типов
+    """
+    class Meta(BaseMeta):
+        abstract = True
+
+    id: int = ormar.Integer(primary_key=True, autoincrement=False, comment='id')
+    name: str = ormar.String(max_length=250, index=True, comment='Полное наименование типа объекта')
+    short_name: str = ormar.String(max_length=50, nullable=True, comment='Краткое наименование типа объекта')
+    description: str = ormar.String(max_length=250, nullable=True, comment='Описание')
+
+    def __str__(self):
+        return f'{self.id}: {self.name}'
+
+
 class Level(ormar.Model, DateModelMixin):
     """
     Сведения по уровням адресных объектов
@@ -33,54 +49,41 @@ class Level(ormar.Model, DateModelMixin):
         return f'{self.id}: {self.name}'
 
 
-class ParamType(ormar.Model, DateModelMixin):
+class ParamType(DirectoryBase):
     """
     Сведения по типу параметра
     """
     class Meta(BaseMeta):
         tablename = 'param_types'
 
-    id: int = ormar.Integer(primary_key=True, autoincrement=False, comment='id')
-    name: str = ormar.String(max_length=50, index=True, comment='Наименование')
     code: str = ormar.String(max_length=50, comment='Кодовое обозначение')
-    description: str = ormar.String(max_length=120, comment='Описание')
-
-    def __str__(self):
-        return f'{self.id}: {self.name}'
 
 
-class AddressType(ormar.Model, DateModelMixin):
+class AddressType(DirectoryBase):
     """
     Сведения по типам адресных объектов
     """
     class Meta(BaseMeta):
         tablename = 'address_types'
 
-    id: int = ormar.Integer(primary_key=True, autoincrement=False, comment='id')
     level_id: Union[Level, Dict] = ormar.ForeignKey(Level, nullable=False,
                                                     comment='Уровень адресного объекта {levels.id}')
-    name: str = ormar.String(max_length=250, index=True, comment='Полное наименование типа объекта')
-    short_name: str = ormar.String(max_length=50, comment='Краткое наименование типа объекта')
-    description: str = ormar.String(max_length=250, nullable=True, comment='Описание')
-
-    def __str__(self):
-        return f'{self.id}: {self.name}'
 
 
-class HouseType(ormar.Model, DateModelMixin):
+class HouseType(DirectoryBase):
     """
     Признаки владения
     """
     class Meta(BaseMeta):
         tablename = 'house_types'
 
-    id: int = ormar.Integer(primary_key=True, autoincrement=False, comment='id')
-    name: str = ormar.String(max_length=50, index=True, comment='Полное наименование типа объекта')
-    short_name: str = ormar.String(max_length=20, comment='Краткое наименование типа объекта')
-    description: str = ormar.String(max_length=250, nullable=True, comment='Описание')
 
-    def __str__(self):
-        return f'{self.id}: {self.name}'
+class ApartmentType(DirectoryBase):
+    """
+    Типы помещений
+    """
+    class Meta(BaseMeta):
+        tablename = 'apartment_type'
 
 
 class AddressObject(ormar.Model, DateModelMixin):
@@ -125,15 +128,37 @@ class House(ormar.Model, DateModelMixin):
     add_num1: str = ormar.String(max_length=50, index=True, nullable=True, comment='Дополнительный номер дома 1')
     add_num2: str = ormar.String(max_length=50, index=True, nullable=True, comment='Дополнительный номер дома 2')
     house_type: Union[HouseType, Dict] = ormar.ForeignKey(HouseType, nullable=True, related_name='house_house_type',
-                                                          comment='Основной тип дома')
+                                                          comment='Основной тип дома {house_types.id}')
     add_type1: Union[HouseType, Dict] = ormar.ForeignKey(HouseType, nullable=True, related_name='house_add_type1',
-                                                         comment='Дополнительный тип дома 1')
+                                                         comment='Дополнительный тип дома 1 {house_types.id}')
     add_type2: Union[HouseType, Dict] = ormar.ForeignKey(HouseType, nullable=True, related_name='house_add_type2',
-                                                         comment='Дополнительный тип дома 2')
+                                                         comment='Дополнительный тип дома 2 {house_types.id}')
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
     def __str__(self):
         return f'id: {self.id} object_id: {self.object_id}'
+
+
+class Apartment(ormar.Model, DateModelMixin):
+    """
+    Сведения по помещениям
+    """
+    class Meta(BaseMeta):
+        pass
+
+    id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
+    object_id: int = ormar.BigInteger(index=True, unique=True,
+                                      comment='Глобальный уникальный идентификатор адресного объекта')
+    object_guid: str = ormar.String(
+        max_length=36, index=True,
+        comment='Глобальный уникальный идентификатор адресного объекта. Соответствует коду ФИАС'
+    )
+    number: str = ormar.String(max_length=50, index=True, nullable=False, comment='Номер помещения')
+    apartment_type_id: Union[ApartmentType, Dict] = ormar.ForeignKey(
+        ApartmentType, nullable=False,
+        comment='Уровень адресного объекта {apartment_type.id}'
+    )
+    is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
 
 class AdministrationHierarchy(ormar.Model, DateModelMixin):
@@ -145,7 +170,7 @@ class AdministrationHierarchy(ormar.Model, DateModelMixin):
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(
-        index=True, nullable=False,  unique=True,
+        index=True, nullable=False,
         comment='Глобальный уникальный идентификатор адресного объекта '
                 '{address_objects | houses | apartments -> object_id}'
     )
@@ -162,6 +187,28 @@ class AdministrationHierarchy(ormar.Model, DateModelMixin):
 
     def __str__(self):
         return f'id: {self.id} object_id: {self.object_id} parent_object_id: {self.parent_object_id}'
+
+
+class MunHierarchy(ormar.Model, DateModelMixin):
+    """
+    Сведения по иерархии в административном делении
+    """
+    class Meta(BaseMeta):
+        tablename = 'num_hierarchy'
+
+    id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
+    object_id: int = ormar.BigInteger(
+        index=True, nullable=False,
+        comment='Глобальный уникальный идентификатор адресного объекта '
+                '{address_objects | houses | apartments -> object_id}'
+    )
+    parent_object_id: int = ormar.BigInteger(
+        index=True, nullable=True,
+        comment='Идентификатор родительского объекта {address_objects | houses | apartments -> object_id}'
+    )
+    oktmo: str = ormar.String(max_length=50, comment='Код ОКТМО')
+    path: str = ormar.String(max_length=250, nullable=True,
+                             comment='Материализованный путь к объекту (полная иерархия)')
 
 
 class AddressObjectParam(ormar.Model):

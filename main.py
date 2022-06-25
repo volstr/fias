@@ -1,7 +1,9 @@
+import zipfile
+
 from fastapi import FastAPI
 
 from core import database
-from fns.import_gar import UpdateFile
+from fns.import_gar import GarImport
 from gar import models
 
 app = FastAPI()
@@ -42,6 +44,8 @@ async def shutdown() -> None:
 
 @app.on_event("startup")
 async def main() -> None:
-    file_name = r'D:\Project\KMIAC\PyFIAS\updates\20211112_gar_xml.zip'
-    d = UpdateFile(file_name)
-    await d.load_file_list(file_name)
+    zip_name = r'D:\Project\KMIAC\PyFIAS\updates\20211112_gar_xml.zip'
+
+    with zipfile.ZipFile(zip_name, mode='r', allowZip64=True) as archive:
+        gar = GarImport(archive, 23)
+        await gar.import_all()
