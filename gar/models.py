@@ -166,7 +166,7 @@ class AdministrationHierarchy(ormar.Model, DateModelMixin):
     Сведения по иерархии в административном делении
     """
     class Meta(BaseMeta):
-        tablename = 'administration_hierarchy'
+        tablename = 'hierarchy_adm'
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(
@@ -194,7 +194,7 @@ class MunHierarchy(ormar.Model, DateModelMixin):
     Сведения по иерархии в административном делении
     """
     class Meta(BaseMeta):
-        tablename = 'num_hierarchy'
+        tablename = 'hierarchy_mun'
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(

@@ -4,7 +4,7 @@ import zipfile
 from datetime import datetime
 from typing import List, Any, Optional
 
-
+from core.log import get_logger
 from fns.gar_xml import rows_from_xml
 from gar.models import Level, AddressObject, AddressType, ParamType, AdministrationHierarchy, AddressObjectParam, \
     HouseType, House, ApartmentType, Apartment, MunHierarchy
@@ -12,6 +12,7 @@ from gar.models import Level, AddressObject, AddressType, ParamType, Administrat
 
 class GarImportBase:
     def __init__(self, archive: zipfile.ZipFile, region: Optional[int] = None) -> None:
+        self.log = get_logger('import')
         assert region is None or 0 < region < 100, 'Не корректно указан регион'
         self.archive = archive
         self.region = region
@@ -26,20 +27,24 @@ class GarImportBase:
 
     def _load_file_list(self) -> None:
         region = f'{self.region:0=2}' if self.region else ''
-        fl = sorted(self.archive.namelist())
-        self._file_levels: str = [x for x in fl if 'AS_OBJECT_LEVELS_202' in x][0]
-        self._file_address_object_type: str = [x for x in fl if 'AS_ADDR_OBJ_TYPES_202' in x][0]
-        self._file_param_type: str = [x for x in fl if 'AS_PARAM_TYPES_202' in x][0]
-        self._file_house_type: str = [x for x in fl if 'AS_HOUSE_TYPES_202' in x][0]
-        self._file_apartment_type: str = [x for x in fl if 'AS_APARTMENT_TYPES_202' in x][0]
-        self._file_address_object: List[str] = [x for x in fl if f'{region}/AS_ADDR_OBJ_202' in x]
-        self._file_house: List[str] = [x for x in fl if f'{region}/AS_HOUSES_202' in x]
-        self._file_apartment: List[str] = [x for x in fl if f'{region}/AS_APARTMENTS_202' in x]
-        self._file_administration_hierarchy: List[str] = [x for x in fl if f'{region}/AS_ADM_HIERARCHY_202' in x]
-        self._file_mun_hierarchy: List[str] = [x for x in fl if f'{region}/AS_MUN_HIERARCHY_202' in x]
-        self._file_address_object_param: List[str] = [x for x in fl if f'{region}/AS_ADDR_OBJ_PARAMS_202' in x]
 
-    async def _commit_updates(self, model, items, is_exist: bool, check_object_id: bool = False) -> None:
+        def get_files_by_mask(mask: str) -> List[str]:
+            return [x for x in file_list if mask in x]
+
+        file_list = sorted(self.archive.namelist())
+        self._file_levels: str = get_files_by_mask('AS_OBJECT_LEVELS_202')[0]
+        self._file_address_object_type: str = get_files_by_mask('AS_ADDR_OBJ_TYPES_202')[0]
+        self._file_param_type: str = get_files_by_mask('AS_PARAM_TYPES_202')[0]
+        self._file_house_type: str = get_files_by_mask('AS_HOUSE_TYPES_202')[0]
+        self._file_apartment_type: str = get_files_by_mask('AS_APARTMENT_TYPES_202')[0]
+        self._file_address_object: List[str] = get_files_by_mask(f'{region}/AS_ADDR_OBJ_202')
+        self._file_house: List[str] = get_files_by_mask(f'{region}/AS_HOUSES_202')
+        self._file_apartment: List[str] = get_files_by_mask(f'{region}/AS_APARTMENTS_202')
+        self._file_adm_hierarchy: List[str] = get_files_by_mask(f'{region}/AS_ADM_HIERARCHY_202')
+        self._file_mun_hierarchy: List[str] = get_files_by_mask(f'{region}/AS_MUN_HIERARCHY_202')
+        self._file_object_param: List[str] = get_files_by_mask(f'{region}/AS_ADDR_OBJ_PARAMS_202')
+
+    async def _commit_updates(self, model, items, is_exist: bool, file: str, check_object_id: bool = False) -> None:
         if check_object_id:
             checked_object_id_list = []
             object_id_list = [x.object_id for x in items]
@@ -57,7 +62,7 @@ class GarImportBase:
 
         if not is_exist:
             # Если изначально таблица пустая - ничего проверять не будем, просто добавляем
-            await model.objects.bulk_create(items)
+            await self._bulk_create(file, model, items)
         else:
             # Таблица не пустая, разбираемся что добавлять, а что обновлять
             id_from_arch: set = {x.id for x in items}
@@ -67,9 +72,33 @@ class GarImportBase:
             id_to_update = id_from_arch - id_to_insert
 
             if id_to_update:
-                await model.objects.bulk_update([x for x in items if x.id in id_to_update])
+                await self._bulk_update(file, model, [x for x in items if x.id in id_to_update])
             if id_to_insert:
-                await model.objects.bulk_create([x for x in items if x.id in id_to_insert])
+                await self._bulk_create(file, model, [x for x in items if x.id in id_to_insert])
+
+    async def _bulk_create(self, file: str, model: Any, items: List) -> None:
+        try:
+            await model.objects.bulk_create(items)
+        except Exception as block_except:
+            # Ошибка при добавлении блока. Пробуем добавлять по одной записи
+            self.log.warning(f'Ошибка при добавлении блока. {file}. Добавляем по одной записи: {block_except}')
+            for i in items:
+                try:
+                    await model.objects.create(**i.dict())
+                except Exception as e:
+                    self.log.error(f'File {file}.\n\tItem: {i.dict()}\n{e}')
+
+    async def _bulk_update(self, file: str, model: Any, items: List) -> None:
+        try:
+            await model.objects.bulk_update(items)
+        except Exception as block_except:
+            # Ошибка при изменении блока. Пробуем изменять по одной записи
+            self.log.warning(f'Ошибка при изменении блока. {file}. Изменяем по одной записи: {block_except}')
+            for i in items:
+                try:
+                    await model.objects.bulk_update([i])
+                except Exception as e:
+                    self.log.error(f'File {file}.\n\tItem: {i.dict()}\n{e}')
 
     async def _import_model(self, model, file_name: str, callback: Any, check_object_id: bool = False) -> None:
         items = collections.deque()
@@ -81,13 +110,10 @@ class GarImportBase:
                 items.append(value)
                 # Добавляем/обновляем блоками по 1000 записей
                 if len(items) >= 1000:
-                    await self._commit_updates(model, items, is_exist, check_object_id)
+                    await self._commit_updates(model, items, is_exist, file_name, check_object_id)
                     items.clear()
-                    # TODO
-                    if idx > 50000:
-                        break
         # Добавляем оставшееся
-        await self._commit_updates(model, items, is_exist, check_object_id)
+        await self._commit_updates(model, items, is_exist, file_name, check_object_id)
 
 
 class GarImport(GarImportBase):
@@ -96,6 +122,7 @@ class GarImport(GarImportBase):
 
     async def import_level(self):
         file_name = self._file_levels
+        self.log.info(f'Импорт сведений по уровням адресных объектов (AS_OBJECT_LEVELS)...')
         assert 'AS_OBJECT_LEVELS_202' in file_name, f'{file_name} не OBJECT_LEVELS'
 
         def parse(item) -> Level:
@@ -112,6 +139,7 @@ class GarImport(GarImportBase):
 
     async def import_address_type(self):
         file_name = self._file_address_object_type
+        self.log.info(f'Импорт сведений по типам адресных объектов (AS_ADDR_OBJ_TYPES)...')
         assert 'AS_ADDR_OBJ_TYPES_202' in file_name, f'{file_name} не ADDR_OBJ_TYPES'
 
         def parse(item) -> AddressType:
@@ -130,6 +158,7 @@ class GarImport(GarImportBase):
 
     async def import_param_types(self):
         file_name = self._file_param_type
+        self.log.info(f'Импорт сведений по типу параметра (AS_PARAM_TYPES)...')
         assert 'AS_PARAM_TYPES_202' in file_name, f'{file_name} не PARAM_TYPES'
 
         def parse(item) -> ParamType:
@@ -147,6 +176,7 @@ class GarImport(GarImportBase):
 
     async def import_house_types(self):
         file_name = self._file_house_type
+        self.log.info(f'Импорт сведений по признакам владения (AS_HOUSE_TYPES)...')
         assert 'AS_HOUSE_TYPES_202' in file_name, f'{file_name} не HOUSE_TYPES'
 
         def parse(item) -> HouseType:
@@ -164,6 +194,7 @@ class GarImport(GarImportBase):
 
     async def import_apartment_type(self):
         file_name = self._file_apartment_type
+        self.log.info(f'Импорт сведений по типам помещений (AS_APARTMENT_TYPES)...')
         assert 'AS_APARTMENT_TYPES_202' in file_name, f'{file_name} не AS_APARTMENT_TYPES'
 
         def parse(item) -> ApartmentType:
@@ -183,6 +214,8 @@ class GarImport(GarImportBase):
         """
         Импорт сведений классификатора адресообразующих элементов (регионы, города, улицы... Домов тут нет)
         """
+        self.log.info(f'Импорт классификатора адресообразующих элементов (AS_ADDR_OBJ)...')
+
         def parse(item) -> Optional[AddressObject]:
             if int(item.get('@NEXTID', 0)) == 0 and item.get('@NAME'):
                 # Выбираем только актуальные записи
@@ -210,9 +243,14 @@ class GarImport(GarImportBase):
         """
         Импорт сведений по номерам домов улиц городов и населенных пунктов (HOUSE)
         """
+        self.log.info(f'Импорт сведений по номерам домов улиц городов и населенных пунктов (AS_HOUSE)...')
+
         def parse(item: dict) -> Optional[House]:
             if int(item.get('@NEXTID', 0)) == 0:
                 # Выбираем только актуальные записи
+                if int(item.get('@HOUSETYPE', 0)) < 0:
+                    # Пропускаем записи, нарушающие ограничения внешнего ключа
+                    return
                 return House(
                     id=item.get('@ID'),
                     object_id=item.get('@OBJECTID'),
@@ -236,10 +274,12 @@ class GarImport(GarImportBase):
         ]
         await asyncio.gather(*tasks)
 
-    async def import_apartment(self):
+    async def import_apartments(self):
         """
         Импорт сведений по помещениям
         """
+        self.log.info(f'Импорт сведений по помещениям (AS_APARTMENTS)...')
+
         def parse(item) -> Optional[Apartment]:
             if int(item.get('@NEXTID', 0)) == 0:
                 # Выбираем только актуальные записи
@@ -265,6 +305,8 @@ class GarImport(GarImportBase):
         """
         Импорт сведений по иерархии в административном делении
         """
+        self.log.info(f'Импорт сведений по иерархии в административном делении (AS_ADM_HIERARCHY)...')
+
         def parse(item) -> Optional[AdministrationHierarchy]:
             if int(item.get('@NEXTID', 0)) == 0:
                 # Выбираем только актуальные записи
@@ -285,7 +327,7 @@ class GarImport(GarImportBase):
                 )
         tasks = [
             asyncio.create_task(self._import_model(AdministrationHierarchy, file_name, parse, True))
-            for file_name in self._file_administration_hierarchy
+            for file_name in self._file_adm_hierarchy
         ]
         await asyncio.gather(*tasks)
 
@@ -293,6 +335,8 @@ class GarImport(GarImportBase):
         """
         Импорт сведений по иерархии в муниципальном делении
         """
+        self.log.info(f'Импорт сведений по иерархии в муниципальном делении (AS_MUN_HIERARCHY)...')
+
         def parse(item) -> Optional[MunHierarchy]:
             if int(item.get('@NEXTID', 0)) == 0:
                 # Выбираем только актуальные записи
@@ -317,9 +361,10 @@ class GarImport(GarImportBase):
         """
         Импорт сведений по типу параметра (в простонародье КЛАДР)
         """
+        self.log.info(f'Импорт сведений по типу параметра (в простонародье КЛАДР) (AS_ADDR_OBJ_PARAMS)...')
+
         def parse(item) -> Optional[AddressObjectParam]:
             type_id = int(item.get('@TYPEID'))
-            # if type_id in {10, 16} and datetime.strptime(i.get('@ENDDATE'), "%Y-%m-%d") > datetime.now():
             if type_id in {10, 16} and int(item.get('@CHANGEIDEND', 0)) == 0:
                 # Читаем КЛАДР из списка с признаком актуальности и убираем этот признак.
                 # Можно было бы брать сразу из списка с TYPEID == 11, но он у них давно не обновлялся
@@ -334,33 +379,25 @@ class GarImport(GarImportBase):
                     )
         tasks = [
             asyncio.create_task(self._import_model(AddressObjectParam, file_name, parse, True))
-            for file_name in self._file_address_object_param
+            for file_name in self._file_object_param
         ]
         await asyncio.gather(*tasks)
 
     async def import_all(self):
-        print(1, datetime.now())
-        await self.import_level()
-        await self.import_address_type()
-        await self.import_param_types()
-        await self.import_house_types()
-        await self.import_apartment_type()
-        print(2, datetime.now())
+        str_region = f'Регион: {self.region:0=2}' if self.region else ''
+        self.log.info(f'Импорт ГАР/ФИАС. Файл {self.archive.filename}. {str_region}')
 
-        await self.import_address_object()
-        print(3, datetime.now())
+        # await self.import_level()
+        # await self.import_address_type()
+        # await self.import_param_types()
+        # await self.import_house_types()
+        # await self.import_apartment_type()
 
-        await self.import_houses()
-        print(4, datetime.now())
+        # await self.import_address_object()
+        # await self.import_houses()
 
-        await self.import_apartment()
-        print(5, datetime.now())
-
-        await self.import_administration_hierarchy()
-        print(6, datetime.now())
-
-        await self.import_mun_hierarchy()
-        print(7, datetime.now())
-
-        await self.import_address_object_param()
-        print(8, datetime.now())
+        await self.import_apartments()
+        # await self.import_administration_hierarchy()
+        # await self.import_mun_hierarchy()
+        # await self.import_address_object_param()
+        self.log.info('Импорт завершен')
