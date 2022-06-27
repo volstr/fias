@@ -2,31 +2,19 @@ import databases
 import ormar
 import sqlalchemy
 
-# https://github.com/joshua-hashimoto/fastapi-ormar
+from core.settings import settings
 
 
 def get_connection_url() -> str:
     """ Получить строку подключения к базе данных """
-    print('database')
-    return "sqlite:///test.db"
-
-    # host = 'localhost'
-    # user = 'postgres'
-    # password = 'qwerty'
-    # db = 'gar'
-    # return f'postgresql://{user}:{password}@{host}:5432/{db}'
-
-
-# metadata = sqlalchemy.MetaData()
-
-# # create the database
-# # note that in production you should use migrations
-# # note that this is not required if you connect to existing database
-# DATABASE_URL = "sqlite:///test.db"
-# engine = sqlalchemy.create_engine(DATABASE_URL)
-# # just to be sure we clear the db before
-# metadata.drop_all(engine)
-# metadata.create_all(engine)
+    db = settings.database
+    if db.driver_name == db.DriverName.sqlite:
+        return f"sqlite:///{settings.database.base}"
+    elif db.driver_name in {db.DriverName.postgresql, db.DriverName.mysql}:
+        port = f':{db.port}' if db.port else ""
+        return f'{db.driver_name}://{db.user}:{db.password}@{db.host}{port}/{db.base}'
+    else:
+        raise Exception("Не верно указан драйвер БД")
 
 
 database = databases.Database(get_connection_url())
@@ -64,4 +52,3 @@ def replace_database():
     #     # i.Meta.database = database
     #
     # return s
-

@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import os
 import zipfile
 from datetime import datetime
 from typing import List, Any, Optional
@@ -16,6 +17,7 @@ class GarImportBase:
         assert region is None or 0 < region < 100, 'Не корректно указан регион'
         self.archive = archive
         self.region = region
+        self._version: int = int(os.path.basename(self.archive.filename)[:8])
 
         # Модели, в которых будем проверять наличие object_id, для того, что бы не загружать лишние зависимости.
         self._checked_models = (
@@ -23,7 +25,13 @@ class GarImportBase:
             House,
             Apartment,
         )
+
         self._load_file_list()
+
+    @property
+    def version(self):
+        """ Получить версию файла обновления из имени файла """
+        return self._version
 
     def _load_file_list(self) -> None:
         region = f'{self.region:0=2}' if self.region else ''
@@ -121,8 +129,8 @@ class GarImport(GarImportBase):
         super().__init__(archive, region)
 
     async def import_level(self):
-        file_name = self._file_levels
         self.log.info(f'Импорт сведений по уровням адресных объектов (AS_OBJECT_LEVELS)...')
+        file_name = self._file_levels
         assert 'AS_OBJECT_LEVELS_202' in file_name, f'{file_name} не OBJECT_LEVELS'
 
         def parse(item) -> Level:
@@ -138,8 +146,8 @@ class GarImport(GarImportBase):
         await self._import_model(Level, file_name, parse)
 
     async def import_address_type(self):
-        file_name = self._file_address_object_type
         self.log.info(f'Импорт сведений по типам адресных объектов (AS_ADDR_OBJ_TYPES)...')
+        file_name = self._file_address_object_type
         assert 'AS_ADDR_OBJ_TYPES_202' in file_name, f'{file_name} не ADDR_OBJ_TYPES'
 
         def parse(item) -> AddressType:
@@ -157,8 +165,8 @@ class GarImport(GarImportBase):
         await self._import_model(AddressType, file_name, parse)
 
     async def import_param_types(self):
-        file_name = self._file_param_type
         self.log.info(f'Импорт сведений по типу параметра (AS_PARAM_TYPES)...')
+        file_name = self._file_param_type
         assert 'AS_PARAM_TYPES_202' in file_name, f'{file_name} не PARAM_TYPES'
 
         def parse(item) -> ParamType:
@@ -175,8 +183,8 @@ class GarImport(GarImportBase):
         await self._import_model(ParamType, file_name, parse)
 
     async def import_house_types(self):
-        file_name = self._file_house_type
         self.log.info(f'Импорт сведений по признакам владения (AS_HOUSE_TYPES)...')
+        file_name = self._file_house_type
         assert 'AS_HOUSE_TYPES_202' in file_name, f'{file_name} не HOUSE_TYPES'
 
         def parse(item) -> HouseType:
@@ -193,8 +201,8 @@ class GarImport(GarImportBase):
         await self._import_model(HouseType, file_name, parse)
 
     async def import_apartment_type(self):
-        file_name = self._file_apartment_type
         self.log.info(f'Импорт сведений по типам помещений (AS_APARTMENT_TYPES)...')
+        file_name = self._file_apartment_type
         assert 'AS_APARTMENT_TYPES_202' in file_name, f'{file_name} не AS_APARTMENT_TYPES'
 
         def parse(item) -> ApartmentType:
@@ -211,10 +219,7 @@ class GarImport(GarImportBase):
         await self._import_model(ApartmentType, file_name, parse)
 
     async def import_address_object(self):
-        """
-        Импорт сведений классификатора адресообразующих элементов (регионы, города, улицы... Домов тут нет)
-        """
-        self.log.info(f'Импорт классификатора адресообразующих элементов (AS_ADDR_OBJ)...')
+        self.log.info(f'Импорт классификатора адресообразующих элементов: регионы, города, улицы (AS_ADDR_OBJ)...')
 
         def parse(item) -> Optional[AddressObject]:
             if int(item.get('@NEXTID', 0)) == 0 and item.get('@NAME'):
@@ -240,9 +245,6 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_houses(self):
-        """
-        Импорт сведений по номерам домов улиц городов и населенных пунктов (HOUSE)
-        """
         self.log.info(f'Импорт сведений по номерам домов улиц городов и населенных пунктов (AS_HOUSE)...')
 
         def parse(item: dict) -> Optional[House]:
@@ -275,9 +277,6 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_apartments(self):
-        """
-        Импорт сведений по помещениям
-        """
         self.log.info(f'Импорт сведений по помещениям (AS_APARTMENTS)...')
 
         def parse(item) -> Optional[Apartment]:
@@ -302,9 +301,6 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_administration_hierarchy(self):
-        """
-        Импорт сведений по иерархии в административном делении
-        """
         self.log.info(f'Импорт сведений по иерархии в административном делении (AS_ADM_HIERARCHY)...')
 
         def parse(item) -> Optional[AdministrationHierarchy]:
@@ -332,9 +328,6 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_mun_hierarchy(self):
-        """
-        Импорт сведений по иерархии в муниципальном делении
-        """
         self.log.info(f'Импорт сведений по иерархии в муниципальном делении (AS_MUN_HIERARCHY)...')
 
         def parse(item) -> Optional[MunHierarchy]:
@@ -358,9 +351,6 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_address_object_param(self):
-        """
-        Импорт сведений по типу параметра (в простонародье КЛАДР)
-        """
         self.log.info(f'Импорт сведений по типу параметра (в простонародье КЛАДР) (AS_ADDR_OBJ_PARAMS)...')
 
         def parse(item) -> Optional[AddressObjectParam]:
@@ -384,6 +374,9 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_all(self):
+        """
+        Импорт всех данных из архива
+        """
         str_region = f'Регион: {self.region:0=2}' if self.region else ''
         self.log.info(f'Импорт ГАР/ФИАС. Файл {self.archive.filename}. {str_region}')
 
@@ -395,8 +388,8 @@ class GarImport(GarImportBase):
 
         # await self.import_address_object()
         # await self.import_houses()
+        # await self.import_apartments()
 
-        await self.import_apartments()
         # await self.import_administration_hierarchy()
         # await self.import_mun_hierarchy()
         # await self.import_address_object_param()

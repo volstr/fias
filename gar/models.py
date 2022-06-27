@@ -235,3 +235,30 @@ class AddressObjectParam(ormar.Model):
 
     def __str__(self):
         return self.value
+
+
+class Updates(ormar.Model):
+    """
+    История обновлений
+    """
+    class Meta(BaseMeta):
+        pass
+
+    id: int = ormar.Integer(primary_key=True, autoincrement=False, unique=True, comment='id')
+    update_date: datetime.datetime = ormar.DateTime(nullable=False, default=datetime.datetime.utcnow,
+                                                    updates=datetime.datetime.utcnow,
+                                                    comment='Дата и время выполнения обновления')
+    state: str = ormar.String(max_length=16, nullable=False, comment='Состояние обновления')
+
+    def __str__(self):
+        return f'id: {self.id}'
+
+
+class AlembicVersion(ormar.Model):
+    """
+    Версия миграции БД
+    """
+    class Meta(BaseMeta):
+        tablename = 'alembic_version'
+
+    version_num: str = ormar.String(primary_key=True, max_length=32)
