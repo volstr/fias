@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
         driver_name: DriverName = 'sqlite'
         host: Optional[str]
-        base: Optional[str] = 'fias.sqlite'
+        base: Optional[str]
         user: Optional[str]
         password: Optional[str]
         port: Optional[int]
@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         url: str = 'https://fias.nalog.ru/WebServices/Public/GetAllDownloadFileInfo'
         time: str = '00:00'
         level: Level = 'apartment'
+        region: Optional[int] = None
 
         @validator('time')
         def check_time(cls, v):

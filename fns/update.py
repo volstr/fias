@@ -2,6 +2,7 @@ import asyncio
 import zipfile
 
 from core.database import database
+from core.settings import settings
 from fns.import_gar import GarImport
 from gar.models import AlembicVersion, Updates
 
@@ -22,7 +23,7 @@ async def main():
     zip_name = r'D:\Project\KMIAC\PyFIAS\updates\20211112_gar_xml.zip'
 
     with zipfile.ZipFile(zip_name, mode='r', allowZip64=True) as archive:
-        gar = GarImport(archive, 23)
+        gar = GarImport(archive, settings.update.region)
         await gar.import_all()
 
 if __name__ == '__main__':
