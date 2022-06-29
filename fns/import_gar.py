@@ -200,7 +200,7 @@ class GarImport(GarImportBase):
             )
         await self._import_model(HouseType, file_name, parse)
 
-    async def import_apartment_type(self):
+    async def import_apartment_types(self):
         self.log.info(f'Импорт сведений по типам помещений (AS_APARTMENT_TYPES)...')
         file_name = self._file_apartment_type
         assert 'AS_APARTMENT_TYPES_202' in file_name, f'{file_name} не AS_APARTMENT_TYPES'
@@ -384,7 +384,7 @@ class GarImport(GarImportBase):
         # await self.import_address_type()
         # await self.import_param_types()
         # await self.import_house_types()
-        # await self.import_apartment_type()
+        # await self.import_apartment_types()
 
         # await self.import_address_object()
         # await self.import_houses()

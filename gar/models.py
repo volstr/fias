@@ -242,10 +242,10 @@ class Updates(ormar.Model):
     История обновлений
     """
     class Meta(BaseMeta):
-        pass
+        tablename = 'updates'
 
     id: int = ormar.Integer(primary_key=True, autoincrement=False, unique=True, comment='id')
-    update_date: datetime.datetime = ormar.DateTime(nullable=False, default=datetime.datetime.utcnow,
+    update_date: datetime.datetime = ormar.DateTime(timezone=False, nullable=False, default=datetime.datetime.utcnow,
                                                     updates=datetime.datetime.utcnow,
                                                     comment='Дата и время выполнения обновления')
     state: str = ormar.String(max_length=16, nullable=False, comment='Состояние обновления')
