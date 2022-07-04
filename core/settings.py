@@ -27,12 +27,19 @@ class Settings(BaseSettings):
             home = 'home'
             apartment = 'apartment'
 
+        class Hierarchy(str, Enum):
+            all = 'all'
+            administration = 'administration'
+            municipal = 'municipal'
+
         check: bool = True
         url: str = 'https://fias.nalog.ru/WebServices/Public/GetAllDownloadFileInfo'
         time: str = '00:00'
-        level: Level = 'apartment'
+        level: Level = Level.apartment
+        hierarchy: Hierarchy = Hierarchy.administration
         region: Optional[int] = None
 
+        @classmethod
         @validator('time')
         def check_time(cls, v):
             try:

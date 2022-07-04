@@ -1,7 +1,9 @@
+import asyncio
+
 from fastapi import FastAPI, APIRouter
 
 from core.database import database
-from gar import models
+from gar.models import Updates, AlembicVersion
 from gar.views import router as router_gar
 
 app = FastAPI()
@@ -10,9 +12,18 @@ router = APIRouter()
 # app.state.database = database
 
 
-@app.get("/hello/{name}")
-async def say_hello(name: str):
-    return await models.Level.objects.create(name=name)
+@app.get("/version")
+async def version():
+    tasks = [
+        Updates.objects.filter(state='Выполнено').max('id'),
+        AlembicVersion.objects.first()
+    ]
+    max_id, alembic_version, *_ = await asyncio.gather(*tasks)
+
+    return {
+        'version': max_id,
+        'migration': alembic_version.version_num
+    }
 
 
 @app.on_event("startup")
@@ -44,3 +55,9 @@ async def main() -> None:
 
 router.include_router(router_gar)
 app.include_router(router)
+
+# import logging
+# logging.basicConfig(
+#     format='%(levelname)-10s %(asctime)s %(message)s',
+#     level=logging.DEBUG,
+# )

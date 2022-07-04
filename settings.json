@@ -1,0 +1,18 @@
+{
+    "database": {
+        "driver_name": "sqlite",
+        "host": null,
+        "base": null,
+        "user": null,
+        "password": null,
+        "port": null
+    },
+    "update": {
+        "check": true,
+        "url": "https://fias.nalog.ru/WebServices/Public/GetAllDownloadFileInfo",
+        "time": "00:00",
+        "level": "apartment",
+        "hierarchy": "administration",
+        "region": null
+    }
+}

@@ -31,7 +31,7 @@ class BaseSettings(BaseModel):
             for i in parse.dict():
                 value = getattr(parse, i)
                 setattr(self, i, value)
-            self.save()
+            # self.save()
         except FileNotFoundError:
             self.save()
         except OSError:

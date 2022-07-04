@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import List, Any, Optional
 
 from core.log import get_logger
+from core.settings import settings
 from fns.gar_xml import rows_from_xml
 from gar.models import Level, AddressObject, AddressType, ParamType, AdministrationHierarchy, AddressObjectParam, \
-    HouseType, House, ApartmentType, Apartment, MunHierarchy
+    HouseType, House, ApartmentType, Apartment, MunHierarchy, Updates
 
 
 class GarImportBase:
@@ -351,11 +352,11 @@ class GarImport(GarImportBase):
         await asyncio.gather(*tasks)
 
     async def import_address_object_param(self):
-        self.log.info(f'Импорт сведений по типу параметра (в простонародье КЛАДР) (AS_ADDR_OBJ_PARAMS)...')
+        self.log.info(f'Импорт сведений по типу параметра (КЛАДР) (AS_ADDR_OBJ_PARAMS)...')
 
         def parse(item) -> Optional[AddressObjectParam]:
             type_id = int(item.get('@TYPEID'))
-            if type_id in {10, 16} and int(item.get('@CHANGEIDEND', 0)) == 0:
+            if type_id in {5, 10, 16} and int(item.get('@CHANGEIDEND', 0)) == 0:
                 # Читаем КЛАДР из списка с признаком актуальности и убираем этот признак.
                 # Можно было бы брать сразу из списка с TYPEID == 11, но он у них давно не обновлялся
                 return AddressObjectParam(
@@ -380,17 +381,34 @@ class GarImport(GarImportBase):
         str_region = f'Регион: {self.region:0=2}' if self.region else ''
         self.log.info(f'Импорт ГАР/ФИАС. Файл {self.archive.filename}. {str_region}')
 
-        # await self.import_level()
-        # await self.import_address_type()
-        # await self.import_param_types()
-        # await self.import_house_types()
-        # await self.import_apartment_types()
+        update = Updates(id=self.version, state='Выполняется')
+        await self._commit_updates(Updates, [update], True, 'updates')
 
-        # await self.import_address_object()
-        # await self.import_houses()
-        # await self.import_apartments()
+        try:
+            await self.import_level()
+            await self.import_address_type()
+            await self.import_param_types()
+            await self.import_house_types()
+            await self.import_apartment_types()
 
-        # await self.import_administration_hierarchy()
-        # await self.import_mun_hierarchy()
-        # await self.import_address_object_param()
-        self.log.info('Импорт завершен')
+            await self.import_address_object()
+            if settings.update.level in (settings.update.Level.home, settings.update.Level.apartment):
+                await self.import_houses()
+            if settings.update.level in (settings.update.Level.apartment, ):
+                await self.import_apartments()
+
+            if settings.update.hierarchy in (settings.update.Hierarchy.administration, settings.update.Hierarchy.all):
+                await self.import_administration_hierarchy()
+            if settings.update.hierarchy in (settings.update.Hierarchy.municipal, settings.update.Hierarchy.all):
+                await self.import_mun_hierarchy()
+            await self.import_address_object_param()
+
+            update = Updates(id=self.version, state='Выполнено')
+            await self._commit_updates(Updates, [update], True, 'updates')
+        except Exception as e:
+            update = Updates(id=self.version, state='Ошибка')
+            await self._commit_updates(Updates, [update], True, 'updates')
+            self.log.critical(f'{e}')
+            raise e
+        finally:
+            self.log.info('Импорт завершен')

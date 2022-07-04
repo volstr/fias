@@ -107,7 +107,15 @@ class AddressObject(ormar.Model, DateModelMixin):
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
     def __str__(self):
-        return f'id: {self.id} - {self.name}'
+        type_name = f'{self.type_name}' if self.type_name.endswith(".") else f'{self.type_name}.'
+        return f'{type_name} {self.name}'
+
+    def __repr__(self):
+        return f'id: {self.id} - {str(self)}'
+
+    def dict(self, **kwargs):
+        kwargs.update(exclude={'level_id': {'addresstypes'}})
+        return super().dict(**kwargs)
 
 
 class House(ormar.Model, DateModelMixin):
@@ -136,7 +144,18 @@ class House(ormar.Model, DateModelMixin):
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
     def __str__(self):
-        return f'id: {self.id} object_id: {self.object_id}'
+        if isinstance(self.house_type, dict):
+            house_num = f'д. {self.house_num}' if self.house_num else ''
+            add_num1 = f', д1. {self.add_num1}' if self.add_num1 else ''
+            add_num2 = f', д2. {self.add_num2}' if self.add_num2 else ''
+            return f'[{house_num}{add_num1}{add_num2}]'
+        house_num = f'{self.house_type.short_name} {self.house_num}' if self.house_num else ''
+        add_num1 = f', {self.add_type1.short_name} {self.add_num1}' if self.add_num1 else ''
+        add_num2 = f', {self.add_type2.short_name} {self.add_num2}' if self.add_num2 else ''
+        return f'{house_num}{add_num1}{add_num2}'
+
+    def __repr__(self):
+        return f'id: {self.id} - {str(self)}'
 
 
 class Apartment(ormar.Model, DateModelMixin):
@@ -159,6 +178,16 @@ class Apartment(ormar.Model, DateModelMixin):
         comment='Уровень адресного объекта {apartment_type.id}'
     )
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
+
+    def __str__(self):
+        if isinstance(self.apartment_type_id, dict):
+            number = f'кв. {self.number}' if self.number else ''
+            return f'[{number}]'
+        number = f'{self.apartment_type_id.short_name} {self.number}' if self.number else ''
+        return f'{number}'
+
+    def __repr__(self):
+        return f'id: {self.id} - {str(self)}'
 
 
 class AdministrationHierarchy(ormar.Model, DateModelMixin):
@@ -221,8 +250,7 @@ class AddressObjectParam(ormar.Model):
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(
         index=True, nullable=False,
-        comment='Глобальный уникальный идентификатор адресного объекта '
-                '{address_objects | houses | apartments -> object_id}'
+        comment='Глобальный уникальный идентификатор адресного объекта {address_objects}'
     )
     param_type_id: Union[ParamType, Dict] = ormar.ForeignKey(
         ParamType, nullable=False,
@@ -248,10 +276,11 @@ class Updates(ormar.Model):
     update_date: datetime.datetime = ormar.DateTime(timezone=False, nullable=False, default=datetime.datetime.utcnow,
                                                     updates=datetime.datetime.utcnow,
                                                     comment='Дата и время выполнения обновления')
+    # Выполняется, Выполнено, Ошибка
     state: str = ormar.String(max_length=16, nullable=False, comment='Состояние обновления')
 
     def __str__(self):
-        return f'id: {self.id}'
+        return f'id: {self.id} {self.state}'
 
 
 class AlembicVersion(ormar.Model):
