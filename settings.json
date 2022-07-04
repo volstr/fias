@@ -1,10 +1,10 @@
 {
     "database": {
         "driver_name": "sqlite",
-        "host": null,
-        "base": null,
-        "user": null,
-        "password": null,
+        "host": "localhost",
+        "base": "gar.sqlite",
+        "user": "postgres",
+        "password": "qwerty",
         "port": null
     },
     "update": {
@@ -12,7 +12,7 @@
         "url": "https://fias.nalog.ru/WebServices/Public/GetAllDownloadFileInfo",
         "time": "00:00",
         "level": "apartment",
-        "hierarchy": "administration",
-        "region": null
+        "hierarchy": "all",
+        "region": 23
     }
 }

@@ -4,3 +4,4 @@ venv
 logs
 *.db
 *.sqlite
+settings.json
