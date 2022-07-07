@@ -92,6 +92,7 @@ class AddressObject(ormar.Model, DateModelMixin):
     """
     class Meta(BaseMeta):
         tablename = 'address_objects'
+        orders_by = ('-is_actual', 'name')
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(index=True, unique=True,
@@ -115,7 +116,9 @@ class AddressObject(ormar.Model, DateModelMixin):
 
     def dict(self, **kwargs):
         kwargs.update(exclude={'level_id': {'addresstypes'}})
-        return super().dict(**kwargs)
+        d = super().dict(**kwargs)
+        d['text'] = str(self)
+        return d
 
 
 class House(ormar.Model, DateModelMixin):
@@ -123,7 +126,7 @@ class House(ormar.Model, DateModelMixin):
     Сведения по номерам домов улиц городов и населенных пунктов
     """
     class Meta(BaseMeta):
-        pass
+        orders_by = ('-is_actual', 'house_num', 'add_num1', 'add_num2', )
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(index=True, unique=True,
@@ -142,6 +145,11 @@ class House(ormar.Model, DateModelMixin):
     add_type2: Union[HouseType, Dict] = ormar.ForeignKey(HouseType, nullable=True, related_name='house_add_type2',
                                                          comment='Дополнительный тип дома 2 {house_types.id}')
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
+
+    def dict(self, **kwargs):
+        d = super().dict(**kwargs)
+        d['text'] = str(self)
+        return d
 
     def __str__(self):
         if isinstance(self.house_type, dict):
@@ -163,7 +171,7 @@ class Apartment(ormar.Model, DateModelMixin):
     Сведения по помещениям
     """
     class Meta(BaseMeta):
-        pass
+        orders_by = ('-is_actual', 'number', )
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
     object_id: int = ormar.BigInteger(index=True, unique=True,
@@ -178,6 +186,11 @@ class Apartment(ormar.Model, DateModelMixin):
         comment='Уровень адресного объекта {apartment_type.id}'
     )
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
+
+    def dict(self, **kwargs):
+        d = super().dict(**kwargs)
+        d['text'] = str(self)
+        return d
 
     def __str__(self):
         if isinstance(self.apartment_type_id, dict):
@@ -213,6 +226,9 @@ class AdministrationHierarchy(ormar.Model, DateModelMixin):
     place_code: int = ormar.Integer(nullable=True, comment='Код населенного пункта')
     plan_code: int = ormar.Integer(nullable=True, comment='Код ЭПС')
     street_code: int = ormar.Integer(nullable=True, comment='Код улицы')
+
+    ao_object_id: Union[AddressObject, Dict] = ormar.ForeignKey(AddressObject, name='object_id', virtual=True,
+                                                                related_name='address_object')
 
     def __str__(self):
         return f'id: {self.id} object_id: {self.object_id} parent_object_id: {self.parent_object_id}'

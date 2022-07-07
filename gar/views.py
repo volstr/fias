@@ -8,10 +8,11 @@ from gar.models import Level, AddressType, ParamType, HouseType, ApartmentType, 
 from gar.schemas import LevelSchema, DirectorySchema, ParamTypeSchema, AddressTypeSchema, UpdatesSchema
 from gar.tools import get_address_object, Hierarchy
 
+router_types = APIRouter(prefix='/api', tags=['ГАР / ФИАС - Типы объектов'])
 router = APIRouter(prefix='/api', tags=['ГАР / ФИАС'])
 
 
-@router.get("/levels", response_model=List[LevelSchema])
+@router_types.get("/levels", response_model=List[LevelSchema])
 async def levels():
     """
     Сведения по уровням адресных объектов
@@ -19,7 +20,7 @@ async def levels():
     return await Level.objects.all()
 
 
-@router.get("/house_types", response_model=List[DirectorySchema])
+@router_types.get("/house_types", response_model=List[DirectorySchema])
 async def house_types():
     """
     Признаки владения
@@ -27,7 +28,7 @@ async def house_types():
     return await HouseType.objects.all()
 
 
-@router.get("/apartment_types", response_model=List[DirectorySchema])
+@router_types.get("/apartment_types", response_model=List[DirectorySchema])
 async def house_types():
     """
     Признаки владения
@@ -35,7 +36,7 @@ async def house_types():
     return await ApartmentType.objects.all()
 
 
-@router.get("/param_types", response_model=List[ParamTypeSchema])
+@router_types.get("/param_types", response_model=List[ParamTypeSchema])
 async def param_types():
     """
     Сведения по типу параметра
@@ -43,7 +44,7 @@ async def param_types():
     return await ParamType.objects.all()
 
 
-@router.get("/address_types", response_model=List[AddressTypeSchema])
+@router_types.get("/address_types", response_model=List[AddressTypeSchema])
 async def address_types(is_active: Optional[Union[bool, int]] = None):
     """
     Сведения по уровням адресных объектов
@@ -64,7 +65,7 @@ async def updates():
     return await Updates.objects.all()
 
 
-@router.get("/objects/{object_id}")
+@router.get("/objects/object/{object_id}")
 async def object_by_id(object_id: Union[int, str]):
     """
     <strong>Получить любой адресный объект по object_id или по object_guid</strong>
@@ -82,8 +83,10 @@ async def object_by_id(object_id: Union[int, str]):
 async def object_by_kladr(kladr_code: str):
     """
     <strong>Получить адресный объект по КЛАДР коду</strong>
+
+    Длина КЛАДР кода должна быть 15 символов (без признака актуальности)
     """
-    params = await AddressObjectParam.objects.filter(value=kladr_code).order_by('-start_date').limit(1).all()
+    params = await AddressObjectParam.objects.filter(value=kladr_code[:15]).order_by('-start_date').limit(1).all()
     if not params:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
@@ -97,6 +100,8 @@ async def adm_hierarchy(object_id_or_guid: Union[int, str], objects: bool = Fals
     <strong>Получить административную иерархию объекта по object_id или по object_guid</strong>
     """
     o: Hierarchy = await Hierarchy(AdministrationHierarchy, object_id_or_guid)
+    if not o.object_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return o.dict(objects=objects, hierarchy=hierarchy)
 
 
@@ -106,4 +111,32 @@ async def mun_hierarchy(object_id_or_guid: Union[int, str], objects: bool = Fals
     <strong>Получить муниципальную иерархию объекта по object_id или по object_guid</strong>
     """
     o: Hierarchy = await Hierarchy(MunHierarchy, object_id_or_guid)
+    if not o.object_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return o.dict(objects=objects, hierarchy=hierarchy)
+
+
+@router.get("/objects/find/adm_hierarchy")
+async def find_adm_hierarchy(object_id_or_guid: Optional[Union[int, str]] = None, text: str = '',
+                             objects: bool = False, hierarchy: bool = False, limit: Optional[int] = 5):
+    """
+    <strong>Найти объекты в административной иерархии</strong>
+
+    Для разделения дополнительных номеров дома, использовать ';'
+    """
+    o: Hierarchy = await Hierarchy(AdministrationHierarchy, object_id_or_guid)
+    await o.find(text, limit=limit)
+    return o.dict(objects=objects, hierarchy=hierarchy)
+
+
+@router.get("/objects/find/mun_hierarchy")
+async def find_mun_hierarchy(object_id_or_guid: Optional[Union[int, str]] = None, text: str = '',
+                             objects: bool = False, hierarchy: bool = False, limit: int = 5):
+    """
+    <strong>Найти объекты в муниципальной иерархии</strong>
+
+    Для разделения дополнительных номеров дома, использовать ';'
+    """
+    o: Hierarchy = await Hierarchy(MunHierarchy, object_id_or_guid)
+    await o.find(text, limit=limit)
     return o.dict(objects=objects, hierarchy=hierarchy)

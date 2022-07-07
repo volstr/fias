@@ -4,7 +4,7 @@ from fastapi import FastAPI, APIRouter
 
 from core.database import database
 from gar.models import Updates, AlembicVersion
-from gar.views import router as router_gar
+from gar.views import router as router_gar, router_types
 
 app = FastAPI()
 router = APIRouter()
@@ -53,11 +53,6 @@ async def main() -> None:
     pass
 
 
+router.include_router(router_types)
 router.include_router(router_gar)
 app.include_router(router)
-
-# import logging
-# logging.basicConfig(
-#     format='%(levelname)-10s %(asctime)s %(message)s',
-#     level=logging.DEBUG,
-# )
