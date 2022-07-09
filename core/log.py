@@ -33,3 +33,6 @@ def get_logger(name: str = 'app', level: int = logging.INFO) -> logging.Logger:
         logger.addHandler(log_std_handler)
 
     return logger
+
+
+import_log = get_logger('import')

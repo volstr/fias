@@ -38,21 +38,6 @@ async def shutdown() -> None:
         await database.disconnect()
 
 
-@app.on_event("startup")
-async def main() -> None:
-    # import subprocess
-    # import sys
-    #
-    # command = 'fns\\update.py'
-    #
-    # # Запуск обновления
-    # sp = subprocess.Popen(f'{sys.executable} {command}')
-    # print('subprocess OK')
-    # print(sp)
-
-    pass
-
-
 router.include_router(router_types)
 router.include_router(router_gar)
 app.include_router(router)

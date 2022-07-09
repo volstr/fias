@@ -95,7 +95,7 @@ class AddressObject(ormar.Model, DateModelMixin):
         orders_by = ('-is_actual', 'name')
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
-    object_id: int = ormar.BigInteger(index=True, unique=True,
+    object_id: int = ormar.BigInteger(index=True,
                                       comment='Глобальный уникальный идентификатор адресного объекта')
     object_guid: str = ormar.String(
         max_length=36, index=True,
@@ -107,6 +107,10 @@ class AddressObject(ormar.Model, DateModelMixin):
                                                     comment='Уровень адресного объекта {levels.id}')
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
+    @ormar.property_field
+    def text(self):
+        return str(self)
+
     def __str__(self):
         type_name = f'{self.type_name}' if self.type_name.endswith(".") else f'{self.type_name}.'
         return f'{type_name} {self.name}'
@@ -117,7 +121,6 @@ class AddressObject(ormar.Model, DateModelMixin):
     def dict(self, **kwargs):
         kwargs.update(exclude={'level_id': {'addresstypes'}})
         d = super().dict(**kwargs)
-        d['text'] = str(self)
         return d
 
 
@@ -129,7 +132,7 @@ class House(ormar.Model, DateModelMixin):
         orders_by = ('-is_actual', 'house_num', 'add_num1', 'add_num2', )
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
-    object_id: int = ormar.BigInteger(index=True, unique=True,
+    object_id: int = ormar.BigInteger(index=True,
                                       comment='Глобальный уникальный идентификатор адресного объекта')
     object_guid: str = ormar.String(
         max_length=36, index=True,
@@ -146,10 +149,9 @@ class House(ormar.Model, DateModelMixin):
                                                          comment='Дополнительный тип дома 2 {house_types.id}')
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
-    def dict(self, **kwargs):
-        d = super().dict(**kwargs)
-        d['text'] = str(self)
-        return d
+    @ormar.property_field
+    def text(self):
+        return str(self)
 
     def __str__(self):
         if isinstance(self.house_type, dict):
@@ -174,7 +176,7 @@ class Apartment(ormar.Model, DateModelMixin):
         orders_by = ('-is_actual', 'number', )
 
     id: int = ormar.BigInteger(primary_key=True, autoincrement=False, comment='id')
-    object_id: int = ormar.BigInteger(index=True, unique=True,
+    object_id: int = ormar.BigInteger(index=True,
                                       comment='Глобальный уникальный идентификатор адресного объекта')
     object_guid: str = ormar.String(
         max_length=36, index=True,
@@ -187,10 +189,9 @@ class Apartment(ormar.Model, DateModelMixin):
     )
     is_actual: bool = ormar.Boolean(comment='Статус актуальности адресного объекта ФИАС')
 
-    def dict(self, **kwargs):
-        d = super().dict(**kwargs)
-        d['text'] = str(self)
-        return d
+    @ormar.property_field
+    def text(self):
+        return str(self)
 
     def __str__(self):
         if isinstance(self.apartment_type_id, dict):

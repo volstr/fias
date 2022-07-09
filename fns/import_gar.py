@@ -5,7 +5,7 @@ import zipfile
 from datetime import datetime
 from typing import List, Any, Optional
 
-from core.log import get_logger
+from core.log import import_log
 from core.settings import settings
 from fns.gar_xml import rows_from_xml
 from gar.models import Level, AddressObject, AddressType, ParamType, AdministrationHierarchy, AddressObjectParam, \
@@ -14,7 +14,7 @@ from gar.models import Level, AddressObject, AddressType, ParamType, Administrat
 
 class GarImportBase:
     def __init__(self, archive: zipfile.ZipFile, region: Optional[int] = None) -> None:
-        self.log = get_logger('import')
+        self.log = import_log
         assert region is None or 0 < region < 100, 'Не корректно указан регион'
         self.archive = archive
         self.region = region
@@ -288,7 +288,7 @@ class GarImport(GarImportBase):
                     object_id=int(item.get('@OBJECTID')),
                     object_guid=item.get('@OBJECTGUID'),
                     number=item.get('@NUMBER'),
-                    apartment_type_id=int(item.get('@APARTTYPE')),
+                    apartment_type_id=abs(int(item.get('@APARTTYPE'))),
                     is_actual=item.get('@ISACTUAL') == '1',
                     update_date=datetime.strptime(item.get('@UPDATEDATE'), "%Y-%m-%d").date(),
                     start_date=datetime.strptime(item.get('@STARTDATE'), "%Y-%m-%d").date(),
