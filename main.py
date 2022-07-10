@@ -12,7 +12,7 @@ router = APIRouter()
 # app.state.database = database
 
 
-@app.get("/version")
+@app.get("/api/version")
 async def version():
     tasks = [
         Updates.objects.filter(state='Выполнено').max('id'),
