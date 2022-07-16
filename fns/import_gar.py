@@ -15,17 +15,15 @@ from gar.models import Level, AddressObject, AddressType, ParamType, Administrat
 class GarImportBase:
     def __init__(self, archive: zipfile.ZipFile, region: Optional[int] = None) -> None:
         self.log = import_log
+        # Для sqlite размер загружаемого блока - 50, для остальных 1000
+        self.block_length = 50 if settings.database.driver_name == settings.database.DriverName.sqlite else 1000
         assert region is None or 0 < region < 100, 'Не корректно указан регион'
         self.archive = archive
         self.region = region
         self._version: int = int(os.path.basename(self.archive.filename)[:8])
 
         # Модели, в которых будем проверять наличие object_id, для того, что бы не загружать лишние зависимости.
-        self._checked_models = (
-            AddressObject,
-            House,
-            Apartment,
-        )
+        self._checked_models = (AddressObject, House, Apartment, )
 
         self._load_file_list()
 
@@ -118,7 +116,7 @@ class GarImportBase:
             if value:
                 items.append(value)
                 # Добавляем/обновляем блоками по 1000 записей
-                if len(items) >= 1000:
+                if len(items) >= self.block_length:
                     await self._commit_updates(model, items, is_exist, file_name, check_object_id)
                     items.clear()
         # Добавляем оставшееся

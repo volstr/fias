@@ -36,7 +36,7 @@ class Settings(BaseSettings):
         url: str = 'https://fias.nalog.ru/WebServices/Public/GetAllDownloadFileInfo'
         time: str = '00:00'
         level: Level = Level.apartment
-        hierarchy: Hierarchy = Hierarchy.administration
+        hierarchy: Hierarchy = Hierarchy.all
         region: Optional[int] = None
 
         @classmethod
